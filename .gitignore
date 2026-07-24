@@ -1,0 +1,14 @@
+# Private environment variables
+.env
+.env.local
+.env.production
+
+# Keep the safe example file
+!.env.example
+
+# Windows files
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/

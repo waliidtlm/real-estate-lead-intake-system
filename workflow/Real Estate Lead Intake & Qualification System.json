@@ -1,0 +1,802 @@
+{
+  "name": "Real Estate Lead Intake & Qualification System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -416,
+        -608
+      ],
+      "id": "2fc8f107-38ef-476d-9260-1bb20e3a628a",
+      "name": "Webhook",
+      "webhookId": "5524f7b0-a9e3-41bd-b832-b610376cba0e"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH matched_lead AS (\n    SELECT id,\n        CASE\n            WHEN source = $1 AND source_lead_id = $2 THEN 1\n            WHEN email = $3 AND $3 IS NOT NULL THEN 2\n            WHEN phone_e164 = $4 AND $4 IS NOT NULL THEN 3\n        END AS match_priority\n    FROM leads\n    WHERE\n        (source = $1 AND source_lead_id = $2)\n        OR ($3 IS NOT NULL AND email = $3)\n        OR ($4 IS NOT NULL AND phone_e164 = $4)\n    ORDER BY match_priority\n    LIMIT 1\n)\nSELECT\n    EXISTS(SELECT 1 FROM matched_lead) AS is_duplicate,\n    (SELECT id FROM matched_lead) AS existing_lead_id;",
+        "options": {
+          "queryReplacement": "={{\n[\n  $json.sanitized.source,\n  $json.sanitized.source_lead_id,\n  $json.sanitized.email,\n  $json.sanitized.phone\n]\n}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1184,
+        -1008
+      ],
+      "id": "a42f9705-2d1d-4b11-b08e-5b4d659d6236",
+      "name": "Check Duplicate",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a2f70526-9e63-45d2-b443-af7d206a6966",
+              "leftValue": "={{$json.is_duplicate}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1456,
+        -1184
+      ],
+      "id": "f9e1133d-0a76-48f2-85da-38370ba6c1bd",
+      "name": "Duplicate ?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads (\n    raw_lead_id,\n    source,\n    source_lead_id,\n    full_name,\n    email,\n    phone_e164,\n    lead_type,\n    location,\n    budget,\n    timeline,\n    message_clean,\n    email_consent,\n    sms_consent\n)\nVALUES (\n    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13\n)\nRETURNING id, lead_status;",
+        "options": {
+          "queryReplacement": "={{ [\n  $('Sanitize Lead').item.json.raw_lead_id,\n  $('Sanitize Lead').item.json.sanitized.source,\n  $('Sanitize Lead').item.json.sanitized.source_lead_id,\n  $('Sanitize Lead').item.json.sanitized.full_name,\n  $('Sanitize Lead').item.json.sanitized.email,\n  $('Sanitize Lead').item.json.sanitized.phone,\n  $('Sanitize Lead').item.json.sanitized.lead_type,\n  $('Sanitize Lead').item.json.sanitized.location,\n  $('Sanitize Lead').item.json.sanitized.budget,\n  $('Sanitize Lead').item.json.sanitized.timeline,\n  $('Sanitize Lead').item.json.sanitized.message,\n  $('Sanitize Lead').item.json.sanitized.email_consent,\n  $('Sanitize Lead').item.json.sanitized.sms_consent\n] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1632,
+        -896
+      ],
+      "id": "1f761d58-794c-4b9d-b22c-41263e167202",
+      "name": "Insert Lead",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE raw_leads\nSET processing_status = 'processed'\nWHERE id = $1\nRETURNING id, processing_status;",
+        "options": {
+          "queryReplacement": "={{ [   $('Sanitize Lead').item.json.raw_lead_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1504,
+        -432
+      ],
+      "id": "ea20ddd9-3588-4c0b-8484-a7e642a6880c",
+      "name": "Mark Processed",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $node[\"Webhook\"].json.body;\n\nconst cleanText = (value, maxLength = 500) => {\n  if (value === null || value === undefined) return null;\n\n  return String(value)\n    .replace(/<[^>]*>/g, \"\")\n    .replace(/[\\u0000-\\u001F\\u007F]/g, \"\")\n    .trim()\n    .replace(/\\s+/g, \" \")\n    .slice(0, maxLength);\n};\n\nconst cleanEmail = body.email\n  ? String(body.email).trim().toLowerCase()\n  : null;\n\nconst cleanPhone = body.phone\n  ? String(body.phone).replace(/[^\\d+]/g, \"\")\n  : null;\n\nreturn {\n  raw_lead_id: $json.id,\n  sanitized: {\n    source: cleanText(body.source, 100),\n    source_lead_id: cleanText(body.source_lead_id, 100),\n    full_name: cleanText(body.full_name, 150),\n    email: cleanEmail,\n    phone: cleanPhone,\n    lead_type: cleanText(body.lead_type, 50),\n    location: cleanText(body.location, 150),\n    budget: body.budget ?? null,\n    timeline: cleanText(body.timeline, 100),\n    message: cleanText(body.message, 1000),\n    email_consent: typeof body.email_consent === \"boolean\" ? body.email_consent : null,\n    sms_consent: typeof body.sms_consent === \"boolean\" ? body.sms_consent : null\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -608
+      ],
+      "id": "8f84038f-fc6e-4eb7-9613-ff4a84139132",
+      "name": "Sanitize Lead"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const lead = $json.sanitized;\nconst errors = [];\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst phoneRegex = /^\\+\\d{8,15}$/;\n\nconst hasValidEmail =\n  Boolean(lead.email) && emailRegex.test(lead.email);\n\nconst hasValidPhone =\n  Boolean(lead.phone) && phoneRegex.test(lead.phone);\n\nif (!lead.source) {\n  errors.push('source_missing');\n}\n\nif (!lead.source_lead_id) {\n  errors.push('source_lead_id_missing');\n}\n\nif (!hasValidEmail && !hasValidPhone) {\n  errors.push('no_valid_contact_method');\n}\n\nif (!lead.lead_type) {\n  errors.push('lead_type_missing');\n}\n\nif (typeof lead.email_consent !== 'boolean') {\n  errors.push('email_consent_missing');\n}\n\nif (typeof lead.sms_consent !== 'boolean') {\n  errors.push('sms_consent_missing');\n}\n\nreturn {\n  ...$json,\n  validation: {\n    is_valid: errors.length === 0,\n    errors,\n    has_valid_email: hasValidEmail,\n    has_valid_phone: hasValidPhone\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        -608
+      ],
+      "id": "91970444-3a0d-41c0-a8a7-ad9273460a59",
+      "name": "Validate Lead"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE raw_leads\nSET processing_status = 'duplicate'\nWHERE id = $1\nRETURNING id, processing_status;",
+        "options": {
+          "queryReplacement": "={{ [   $('Sanitize Lead').item.json.raw_lead_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1440,
+        -272
+      ],
+      "id": "78b260ce-c94c-45ba-a187-87088bc80322",
+      "name": "Mark Duplicate",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET\n    full_name = COALESCE(NULLIF($2, ''), full_name),\n    email = COALESCE(NULLIF($3, ''), email),\n    phone_e164 = COALESCE(NULLIF($4, ''), phone_e164),\n    lead_type = COALESCE(NULLIF($5, ''), lead_type),\n    location = COALESCE(NULLIF($6, ''), location),\n    budget = COALESCE(NULLIF($7, ''), budget),\n    timeline = COALESCE(NULLIF($8, ''), timeline),\n    message_clean = COALESCE(NULLIF($9, ''), message_clean),\n    email_consent = email_consent OR $10,\n    sms_consent = sms_consent OR $11,\n    inquiry_count = inquiry_count + 1,\n    last_inquiry_at = CURRENT_TIMESTAMP,\n    updated_at = CURRENT_TIMESTAMP\nWHERE id = $1\nRETURNING\n    id,\n    full_name,\n    email,\n    phone_e164,\n    budget,\n    timeline,\n    inquiry_count,\n    last_inquiry_at;",
+        "options": {
+          "queryReplacement": "={{ [\n  $('Check Duplicate').item.json.existing_lead_id,\n  $('Sanitize Lead').item.json.sanitized.full_name || null,\n  $('Sanitize Lead').item.json.sanitized.email || null,\n  $('Sanitize Lead').item.json.sanitized.phone || null,\n  $('Sanitize Lead').item.json.sanitized.lead_type || null,\n  $('Sanitize Lead').item.json.sanitized.location || null,\n  $('Sanitize Lead').item.json.sanitized.budget || null,\n  $('Sanitize Lead').item.json.sanitized.timeline || null,\n  $('Sanitize Lead').item.json.sanitized.message || null,\n  $('Sanitize Lead').item.json.sanitized.email_consent ?? false,\n  $('Sanitize Lead').item.json.sanitized.sms_consent ?? false\n] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1776,
+        -1168
+      ],
+      "id": "8f2d8abd-a687-4d5d-af81-d1f5346de674",
+      "name": "Update Existing Lead",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Real Estate Lead Intake Pipeline\n\nPurpose:\nReceive, validate, clean and store incoming leads while preventing duplicates.\n\nWorkflow:\n1. Receive webhook\n2. Store raw payload\n3. Sanitize data\n4. Validate lead\n5. Detect duplicates\n6. Create or update CRM lead\n7. Update processing status\n\nTables:\n- raw_leads: Immutable audit log of all webhook events.\n- leads: Operational CRM containing one record per unique lead.\n\nStatus Values:\n- received\n- processed\n- duplicate\n- invalid",
+        "height": 448,
+        "width": 800,
+        "color": "#32C8BE"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        -1616
+      ],
+      "id": "fce7595d-971a-48b2-b97b-727ad3d39731",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "25969c2a-b5bf-449e-bfe2-2a06b51e0320",
+              "leftValue": "={{ $json.validation.is_valid }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        496,
+        -608
+      ],
+      "id": "8e5d4d9e-f0e8-45b6-ab8a-9d0e522143bf",
+      "name": "Valid ?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE raw_leads\nSET processing_status = 'invalid'\nWHERE id = $1\nRETURNING id, processing_status;",
+        "options": {
+          "queryReplacement": "={{ [$json.raw_lead_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1552,
+        -128
+      ],
+      "id": "c4a16d13-ee24-4855-80f4-8d21a6f1956e",
+      "name": "Mark Invalid",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "##    LEAD INTAKE \n\n Purpose                                      \n• Receive incoming leads                     \n• Store immutable raw payload ",
+        "height": 576,
+        "width": 416
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -816
+      ],
+      "id": "9cada10a-f3fc-4555-a74b-84283b3f3d61",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "##  DATA PROCESSING\n\n Purpose                                     \n• Clean incoming data                        \n• Validate required fields                   \n• Normalize business values    ",
+        "height": 576,
+        "width": 896,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -816
+      ],
+      "id": "3c3a044b-47e9-4e65-904c-857f98680c41",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# CRM LOGIC\n\n Purpose                                       \n • Prevent duplicate leads                     \n • Insert new leads                            \n • Update existing leads   ",
+        "height": 576,
+        "width": 944,
+        "color": "#F8E7B9"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        -1264
+      ],
+      "id": "ed0c5080-ed60-4b49-8d60-51ca870477ad",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# AUDIT LOG\n\n                                             \nPurpose                                       \n• Track processing status                     \n• Preserve complete processing history     ",
+        "height": 432,
+        "width": 688,
+        "color": "#73FF00"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -464
+      ],
+      "id": "ae1a3407-39dd-49e0-a7f0-2747b4de141d",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO raw_leads (\n    request_id,\n    source,\n    raw_payload\n)\nVALUES (\n    $1,\n    $2,\n    $3::jsonb\n)\nRETURNING id, request_id, processing_status;",
+        "options": {
+          "queryReplacement": "={{ [$execution.id, $json.body?.source ?? null, JSON.stringify($json.body ?? {})] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -224,
+        -608
+      ],
+      "id": "c78fd558-0ee5-4227-95fd-c3900c66ba1b",
+      "name": "Store Raw Lead",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Rules Enrichment\n\nPurpose:\nEnrich valid lead data using deterministic business rules.\n\nTasks:\n- Normalize budget into a numeric MAD value\n- Categorize budget range\n- Normalize common Moroccan locations\n- Determine urgency from the timeline\n- Create a structured enrichment object\n\nInput:\n- sanitized.budget\n- sanitized.location\n- sanitized.timeline\n\nOutput:\n- enrichment.rules\n- enrichment.ai\n- enrichment.metadata\n\nNotes:\n- Does not use AI\n- Preserves the original workflow data\n- Unknown values are returned as null or unknown",
+        "height": 896,
+        "width": 230
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        -432
+      ],
+      "id": "083a6e97-b728-4550-8f6b-44ba88cad9b0",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "656c184f-1d25-4ea3-bc3d-34dd24c89c06",
+              "leftValue": "={{ $('Rules Enrichment').item.json.enrichment.rules.urgency }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "91c147e2-58a4-4f64-92ac-b84ab52524db",
+              "leftValue": "={{ $('Rules Enrichment').item.json.enrichment.rules.budget_category }}",
+              "rightValue": "premium",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "55c8ef65-6500-45e4-82e8-a72099655262",
+              "leftValue": "={{ $('Rules Enrichment').item.json.enrichment.rules.budget_category }}",
+              "rightValue": "luxury",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2208,
+        -480
+      ],
+      "id": "41e9f437-0ea2-4062-8b90-6b8b54e0d394",
+      "name": "Should Notify?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const data = $json.sanitized ?? {};\n\nfunction normalizeBudget(value) {\n  if (value === null || value === undefined || value === '') {\n    return null;\n  }\n\n  if (typeof value === 'number') {\n    return Math.round(value);\n  }\n\n  const original = String(value).trim().toLowerCase();\n\n  if (!original) {\n    return null;\n  }\n\n  let multiplier = 1;\n\n  if (\n    original.includes('million') ||\n    original.includes('millions') ||\n    /\\d(?:[.,]\\d+)?\\s*m\\b/.test(original)\n  ) {\n    multiplier = 1_000_000;\n  } else if (\n    original.includes('thousand') ||\n    original.includes('mille') ||\n    /\\d(?:[.,]\\d+)?\\s*k\\b/.test(original)\n  ) {\n    multiplier = 1_000;\n  }\n\n  let cleaned = original\n    .replace(/mad|dhs?|dirhams?|million[s]?|mille|thousand/gi, '')\n    .replace(/[mk]/gi, '')\n    .replace(/\\s+/g, '')\n    .trim();\n\n  if (!cleaned) {\n    return null;\n  }\n\n  if (multiplier > 1) {\n    cleaned = cleaned.replace(',', '.');\n  } else {\n    cleaned = cleaned.replace(/[.,]/g, '');\n  }\n\n  const amount = Number.parseFloat(cleaned);\n\n  if (!Number.isFinite(amount) || amount <= 0) {\n    return null;\n  }\n\n  return Math.round(amount * multiplier);\n}\n\nfunction normalizeLocation(value) {\n  if (!value) {\n    return null;\n  }\n\n  const original = String(value).trim();\n\n  const normalizedKey = original\n    .toLowerCase()\n    .replace(/\\s+/g, ' ');\n\n  const aliases = {\n    casa: 'Casablanca',\n    casablanca: 'Casablanca',\n    'casa blanca': 'Casablanca',\n\n    rabat: 'Rabat',\n\n    marrakech: 'Marrakech',\n    marrakesh: 'Marrakech',\n\n    tangier: 'Tangier',\n    tanger: 'Tangier',\n\n    bouskoura: 'Bouskoura',\n\n    darbouazza: 'Dar Bouazza',\n    'dar bouazza': 'Dar Bouazza',\n\n    mohammedia: 'Mohammedia',\n    agadir: 'Agadir',\n\n    fes: 'Fes',\n    fez: 'Fes'\n  };\n\n  return aliases[normalizedKey] ?? original;\n}\n\nfunction determineUrgency(value) {\n  if (!value) {\n    return 'unknown';\n  }\n\n  const timeline = String(value).trim().toLowerCase();\n\n  const highUrgencyTerms = [\n    'asap',\n    'immediately',\n    'urgent',\n    'today',\n    'this week',\n    'within a week',\n    'before the end of the month'\n  ];\n\n  const mediumUrgencyTerms = [\n    'this month',\n    'next month',\n    '1 month',\n    '2 months',\n    '3 months',\n    'within 3 months'\n  ];\n\n  const lowUrgencyTerms = [\n    'later',\n    'not urgent',\n    'just looking',\n    'exploring',\n    '6 months',\n    'next year'\n  ];\n\n  if (highUrgencyTerms.some(term => timeline.includes(term))) {\n    return 'high';\n  }\n\n  if (mediumUrgencyTerms.some(term => timeline.includes(term))) {\n    return 'medium';\n  }\n\n  if (lowUrgencyTerms.some(term => timeline.includes(term))) {\n    return 'low';\n  }\n\n  return 'unknown';\n}\n\nfunction categorizeBudget(amount) {\n  if (!amount) {\n    return 'unknown';\n  }\n\n  if (amount < 800_000) {\n    return 'entry';\n  }\n\n  if (amount < 1_500_000) {\n    return 'mid_market';\n  }\n\n  if (amount < 3_000_000) {\n    return 'premium';\n  }\n\n  return 'luxury';\n}\n\nconst startedAt = Date.now();\n\nconst budgetNormalized = normalizeBudget(data.budget);\n\nconst rules = {\n  budget_normalized: budgetNormalized,\n  budget_currency: budgetNormalized ? 'MAD' : null,\n  budget_category: categorizeBudget(budgetNormalized),\n  location_normalized: normalizeLocation(data.location),\n  urgency: determineUrgency(data.timeline)\n};\n\nreturn {\n  json: {\n    ...$json,\n    enrichment: {\n      rules,\n      ai: null,\n      metadata: {\n        version: '1.0',\n        method: 'rules',\n        processed_at: new Date().toISOString(),\n        processing_time_ms: Date.now() - startedAt\n      }\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        -624
+      ],
+      "id": "5560a25b-082d-4324-86b6-297e9b2d1ddb",
+      "name": "Rules Enrichment"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const sanitized = $('Sanitize Lead').item.json.sanitized ?? {};\nconst enrichment =\n  $('Rules Enrichment').item.json.enrichment ??\n  {};\n\nconst rules = enrichment.rules ?? {};\n\nfunction formatBudget(amount, currency = 'MAD') {\n  if (!amount || !Number.isFinite(Number(amount))) {\n    return 'Not provided';\n  }\n\n  const value = Number(amount);\n\n  if (value >= 1_000_000) {\n    const millions = value / 1_000_000;\n\n    return `${millions.toFixed(\n      Number.isInteger(millions) ? 0 : 1\n    )}M ${currency}`;\n  }\n\n  if (value >= 1_000) {\n    return `${Math.round(value / 1_000)}K ${currency}`;\n  }\n\n  return `${value.toLocaleString('en-US')} ${currency}`;\n}\n\nfunction getRecommendedAction(urgency, budgetCategory) {\n  if (urgency === 'high') {\n    return 'Call within 15 minutes';\n  }\n\n  if (budgetCategory === 'luxury') {\n    return 'Assign to a senior sales agent';\n  }\n\n  if (budgetCategory === 'premium') {\n    return 'Contact within 1 hour';\n  }\n\n  return 'Review and follow up';\n}\n\nconst priority =\n  rules.urgency === 'high' || rules.budget_category === 'luxury'\n    ? 'HIGH'\n    : 'MEDIUM';\n\nconst notification = {\n  type: 'new_lead_alert',\n  title: 'High-Priority Real Estate Lead',\n  priority,\n\n  lead: {\n    full_name: sanitized.full_name ?? 'Unknown',\n    email: sanitized.email ?? null,\n    phone: sanitized.phone ?? null,\n    lead_type: sanitized.lead_type ?? 'unknown',\n    location:\n      rules.location_normalized ??\n      sanitized.location ??\n      'Not provided',\n    budget: formatBudget(\n      rules.budget_normalized,\n      rules.budget_currency ?? 'MAD'\n    ),\n    budget_category: rules.budget_category ?? 'unknown',\n    urgency: rules.urgency ?? 'unknown',\n    message: sanitized.message ?? null\n  },\n\n  recommended_action: getRecommendedAction(\n    rules.urgency,\n    rules.budget_category\n  ),\n\n  metadata: {\n    raw_lead_id:\n      $('Store Raw Lead').item.json.raw_lead_id ??\n      $('Sanitize Lead').item.json.raw_lead_id ??\n      null,\n    source: sanitized.source ?? null,\n    source_lead_id: sanitized.source_lead_id ?? null,\n    generated_at: new Date().toISOString()\n  }\n};\n\nreturn {\n  json: {\n    ...$json,\n    notification\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        -720
+      ],
+      "id": "0afc8576-3704-4bb0-ab01-d565bd16f881",
+      "name": "Prepare Notification"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO notification_logs (\n    raw_lead_id,\n    lead_id,\n    notification_type,\n    channel,\n    recipient,\n    priority,\n    title,\n    payload,\n    delivery_status\n)\nVALUES (\n    $1,\n    $2,\n    $3,\n    $4,\n    $5,\n    $6,\n    $7,\n    $8::jsonb,\n    'pending'\n)\nRETURNING\n    id AS notification_log_id,\n    delivery_status,\n    created_at;",
+        "options": {
+          "queryReplacement": "={{\n[\n  $('Prepare Notification').item.json.notification.metadata.raw_lead_id,\n  $('Insert Lead').item.json.id,\n  $('Prepare Notification').item.json.notification.type,\n  'email',\n  'sales@example.com',\n  $('Prepare Notification').item.json.notification.priority,\n  $('Prepare Notification').item.json.notification.title,\n  JSON.stringify($('Prepare Notification').item.json.notification)\n]\n}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2656,
+        -784
+      ],
+      "id": "72f813df-57cb-47eb-8e43-f27470b94bb3",
+      "name": "Log Notification",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "tlemcani.waliid@gmail.com",
+        "subject": "={{ $('Prepare Notification').item.json.notification.title }}",
+        "message": "={{\n`NEW REAL ESTATE LEAD\n\nPriority: ${$('Prepare Notification').item.json.notification.priority}\n\nName: ${$('Prepare Notification').item.json.notification.lead.full_name}\nLead type: ${$('Prepare Notification').item.json.notification.lead.lead_type}\nPhone: ${$('Prepare Notification').item.json.notification.lead.phone ?? 'Not provided'}\nEmail: ${$('Prepare Notification').item.json.notification.lead.email ?? 'Not provided'}\n\nLocation: ${$('Prepare Notification').item.json.notification.lead.location}\nBudget: ${$('Prepare Notification').item.json.notification.lead.budget}\nBudget category: ${$('Prepare Notification').item.json.notification.lead.budget_category}\nUrgency: ${$('Prepare Notification').item.json.notification.lead.urgency}\n\nMessage:\n${$('Prepare Notification').item.json.notification.lead.message ?? 'No message provided'}\n\nRecommended action:\n${$('Prepare Notification').item.json.notification.recommended_action}\n\nSource: ${$('Prepare Notification').item.json.notification.metadata.source}\nLead reference: ${$('Prepare Notification').item.json.notification.metadata.source_lead_id}\n`\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        -768
+      ],
+      "id": "c6474da0-2d1f-4613-b945-6b32ee987e0c",
+      "name": "Send Gmail Alert",
+      "webhookId": "655c7bd4-ad4f-4d09-b2c6-eb611c6e6a5b",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "dJXGTKRfYzKwMs66",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE notification_logs\nSET\n    delivery_status = 'sent',\n    provider_message_id = $2,\n    sent_at = CURRENT_TIMESTAMP,\n    updated_at = CURRENT_TIMESTAMP,\n    error_message = NULL\nWHERE id = $1\nRETURNING\n    id AS notification_log_id,\n    delivery_status,\n    provider_message_id,\n    sent_at;",
+        "options": {
+          "queryReplacement": "={{ [   $('Log Notification').item.json.notification_log_id,   $json.id ?? $json.messageId ?? $json.threadId ?? null ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3376,
+        -896
+      ],
+      "id": "999d936e-ed63-4390-a4b5-930565bbca91",
+      "name": "Mark Notification Sent",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f2c65b98-e27a-42df-a181-47ed13d987c9",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3120,
+        -768
+      ],
+      "id": "c082562a-bd2c-4205-9bc0-ac660098cc87",
+      "name": "Did Email Send ?",
+      "retryOnFail": false,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE notification_logs\nSET\n    delivery_status = 'failed',\n    error_message = $2,\n    updated_at = CURRENT_TIMESTAMP\nWHERE id = $1\nRETURNING\n    id,\n    delivery_status,\n    error_message;",
+        "options": {
+          "queryReplacement": "={{\n[\n  $('Log Notification').item.json.notification_log_id,\n  $json.error?.message ?? 'Unknown Gmail error'\n]\n}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3392,
+        -672
+      ],
+      "id": "fa6a4cd0-339a-42a7-a4f0-b54f08e56cf6",
+      "name": "Mark Notification Failed",
+      "credentials": {
+        "postgres": {
+          "id": "AOG3rPjYJhVfoKEi",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Store Raw Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Duplicate ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate ?": {
+      "main": [
+        [
+          {
+            "node": "Update Existing Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Lead": {
+      "main": [
+        [
+          {
+            "node": "Mark Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize Lead": {
+      "main": [
+        [
+          {
+            "node": "Validate Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Lead": {
+      "main": [
+        [
+          {
+            "node": "Valid ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Existing Lead": {
+      "main": [
+        [
+          {
+            "node": "Mark Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid ?": {
+      "main": [
+        [
+          {
+            "node": "Rules Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Raw Lead": {
+      "main": [
+        [
+          {
+            "node": "Sanitize Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Processed": {
+      "main": [
+        [
+          {
+            "node": "Should Notify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rules Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Notify?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Notification": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Notification": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Gmail Alert": {
+      "main": [
+        [
+          {
+            "node": "Did Email Send ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did Email Send ?": {
+      "main": [
+        [
+          {
+            "node": "Mark Notification Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Notification Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "6p2oGBRTJbAP876T",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "8acb007d-faeb-4396-8bee-dcf16068a2c6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "425d32a171aa13b0055ce1723c8eafc84894124fdb0b0c64192887ce14dd57b2"
+  },
+  "nodeGroups": [],
+  "id": "ZnbdtGPmVPnGdirz",
+  "tags": []
+}
