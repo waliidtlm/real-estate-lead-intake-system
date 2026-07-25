@@ -32,6 +32,14 @@ The workflow:
 - notifies the sales team
 - logs failures using a centralized Error Handler workflow
 
+## Results
+
+- Automatically validates incoming real estate leads before processing.
+- Prevents duplicate records using multiple matching strategies.
+- Sends real-time email notifications for qualified and high-priority leads.
+- Centralizes workflow error logging for easier monitoring and troubleshooting.
+- Reduces manual data entry and improves lead response efficiency.
+
 ## Features
 
 - Webhook Lead Intake
@@ -45,47 +53,45 @@ The workflow:
 - Centralized Error Handling
 - Production-ready Workflow Structure
 
-Lead arrives
+## Workflow
 
-↓
+```mermaid
+flowchart TD
 
-Webhook
+A[Lead Received] --> B[Webhook Trigger]
+B --> C[Store Raw Lead]
+C --> D[Sanitize Data]
+D --> E[Validate Lead]
 
-↓
+E -->|Invalid| X[Mark Invalid]
+X --> Y[End]
 
-Sanitize
+E -->|Valid| F[Duplicate Check]
 
-↓
+F -->|New Lead| G[Insert Lead]
+F -->|Existing Lead| H[Update Lead]
 
-Validate
+G --> I[Business Rules Enrichment]
+H --> I
 
-↓
+I --> J{High Priority?}
 
-Duplicate Check
+J -->|Yes| K[Send Email Notification]
+J -->|No| L[Update Status]
 
-↓
+K --> L
+L --> M[Log Notification]
+M --> N[Done]
 
-New Lead?
-        │
-   Yes  │  No
-        │
-Insert   Update
+subgraph Error Handling
+O[Workflow Error Trigger]
+P[Log Error]
+O --> P
+end
+```
+### Complete Workflow
 
-↓
-
-Business Rules
-
-↓
-
-Notify Team
-
-↓
-
-Update Status
-
-↓
-
-Done
+![Complete Workflow](docs/screenshots/Capture%20d’écran%202026-07-24%20215935.png)
 
 ## Tech Stack
 
@@ -120,7 +126,6 @@ real-estate-lead-intake-system/
 ├── workflows/
 │   └── Real Estate Lead Intake & Qualification System.json
 │
-├── demo/                           # Demo assets (optional)
 ├── docker-compose.yml              # PostgreSQL container
 ├── .env.example                    # Environment variables template
 ├── README.md
@@ -133,18 +138,23 @@ Example of a valid lead received by the webhook:
 
 ```json
 {
-  "first_name": "John",
-  "last_name": "Doe",
-  "email": "john.doe@example.com",
-  "phone": "+15551234567",
-  "source": "Website",
-  "lead_type": "Buyer",
-  "budget": 450000,
-  "location": "Casablanca",
-  "message": "Looking for a 3-bedroom apartment.",
-  "timeline": "Within 30 days"
+  "first_name": "Youssef",
+  "last_name": "El Mansouri",
+  "email": "youssef.elmansouri+004@example.com",
+  "phone": "+212661778845",
+  "location": "Rabat",
+  "lead_type": "buyer",
+  "property_type": "villa",
+  "budget": 4800000,
+  "currency": "MAD",
+  "timeline": "Within 2 months",
+  "source": "website",
+  "source_lead_id": "WEB-20260724-005",
+  "message": "My family is relocating to Rabat. We're looking for a 4-bedroom villa with a garden in Hay Riad. We'd like to schedule a viewing as soon as possible.",
+  "preferred_contact_method": "phone",
 }
 ```
+
 
 Additional test payloads are available in the `/examples` directory for:
 
