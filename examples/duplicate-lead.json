@@ -1,0 +1,15 @@
+{
+  "first_name": "Youssef",
+  "last_name": "El Mansouri",
+  "email": "youssef.elmansouri@example.com",
+  "phone": "+212661778845",
+  "location": "Rabat",
+  "lead_type": "buyer",
+  "property_type": "villa",
+  "budget": 5000000,
+  "currency": "MAD",
+  "timeline": "ASAP",
+  "source": "website",
+  "source_lead_id": "WEB-001",
+  "message": "Updated budget. Please contact me as soon as possible."
+}

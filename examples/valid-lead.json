@@ -1,0 +1,15 @@
+{
+  "first_name": "Youssef",
+  "last_name": "El Mansouri",
+  "email": "youssef.elmansouri@example.com",
+  "phone": "+212661778845",
+  "location": "Rabat",
+  "lead_type": "buyer",
+  "property_type": "villa",
+  "budget": 4800000,
+  "currency": "MAD",
+  "timeline": "Within 2 months",
+  "source": "website",
+  "source_lead_id": "WEB-001",
+  "message": "Looking for a 4-bedroom villa in Hay Riad."
+}

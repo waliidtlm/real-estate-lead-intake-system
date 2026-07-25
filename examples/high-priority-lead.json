@@ -1,0 +1,15 @@
+{
+  "first_name": "Sarah",
+  "last_name": "Johnson",
+  "email": "sarah.johnson@example.com",
+  "phone": "+212661445566",
+  "location": "Casablanca",
+  "lead_type": "buyer",
+  "property_type": "villa",
+  "budget": 9500000,
+  "currency": "MAD",
+  "timeline": "This week",
+  "source": "website",
+  "source_lead_id": "WEB-999",
+  "message": "Urgent. We're relocating this week and need to schedule a viewing immediately."
+}

@@ -137,7 +137,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const lead = $json.sanitized;\nconst errors = [];\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst phoneRegex = /^\\+\\d{8,15}$/;\n\nconst hasValidEmail =\n  Boolean(lead.email) && emailRegex.test(lead.email);\n\nconst hasValidPhone =\n  Boolean(lead.phone) && phoneRegex.test(lead.phone);\n\nif (!lead.source) {\n  errors.push('source_missing');\n}\n\nif (!lead.source_lead_id) {\n  errors.push('source_lead_id_missing');\n}\n\nif (!hasValidEmail && !hasValidPhone) {\n  errors.push('no_valid_contact_method');\n}\n\nif (!lead.lead_type) {\n  errors.push('lead_type_missing');\n}\n\nif (typeof lead.email_consent !== 'boolean') {\n  errors.push('email_consent_missing');\n}\n\nif (typeof lead.sms_consent !== 'boolean') {\n  errors.push('sms_consent_missing');\n}\n\nreturn {\n  ...$json,\n  validation: {\n    is_valid: errors.length === 0,\n    errors,\n    has_valid_email: hasValidEmail,\n    has_valid_phone: hasValidPhone\n  }\n};"
+        "jsCode": "const lead = $json.sanitized;\nconst errors = [];\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst phoneRegex = /^\\+\\d{8,15}$/;\n\nconst hasValidEmail =\n  Boolean(lead.email) && emailRegex.test(lead.email);\n\nconst hasValidPhone =\n  Boolean(lead.phone) && phoneRegex.test(lead.phone);\n\nif (!lead.source) {\n  errors.push('source_missing');\n}\n\nif (!lead.source_lead_id) {\n  errors.push('source_lead_id_missing');\n}\n\nif (!hasValidEmail && !hasValidPhone) {\n  errors.push('no_valid_contact_method');\n}\n\nif (!lead.lead_type) {\n  errors.push('lead_type_missing');\n}\n\nreturn {\n  ...$json,\n  validation: {\n    is_valid: errors.length === 0,\n    errors,\n    has_valid_email: hasValidEmail,\n    has_valid_phone: hasValidPhone\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -196,9 +196,9 @@
     },
     {
       "parameters": {
-        "content": "## Real Estate Lead Intake Pipeline\n\nPurpose:\nReceive, validate, clean and store incoming leads while preventing duplicates.\n\nWorkflow:\n1. Receive webhook\n2. Store raw payload\n3. Sanitize data\n4. Validate lead\n5. Detect duplicates\n6. Create or update CRM lead\n7. Update processing status\n\nTables:\n- raw_leads: Immutable audit log of all webhook events.\n- leads: Operational CRM containing one record per unique lead.\n\nStatus Values:\n- received\n- processed\n- duplicate\n- invalid",
-        "height": 448,
-        "width": 800,
+        "content": "## Real Estate Lead Intake Pipeline\n\n## Purpose\nAutomate the intake and qualification of inbound real estate leads while maintaining clean, consistent CRM data.\n\nWorkflow Summary\n1. Receive lead through webhook\n2. Store raw payload for traceability\n3. Validate and sanitize input\n4. Detect duplicate leads\n5. Create or update CRM record\n6. Apply business rules\n7. Notify the sales team\n8. Record processing status\n\n## Outcome\nReduce manual work, improve response time, and ensure consistent lead processing.",
+        "height": 672,
+        "width": 1120,
         "color": "#32C8BE"
       },
       "type": "n8n-nodes-base.stickyNote",
@@ -269,7 +269,7 @@
     },
     {
       "parameters": {
-        "content": "##    LEAD INTAKE \n\n Purpose                                      \n• Receive incoming leads                     \n• Store immutable raw payload ",
+        "content": "## LEAD INTAKE\n\n## Purpose\nReceive new leads from websites, landing pages, forms, or external systems.\n\nTasks\n• Accept webhook request\n• Store original payload\n• Preserve raw data for auditing\n• Pass the request to the processing pipeline\n\n## Output\nRaw lead ready for validation.",
         "height": 576,
         "width": 416
       },
@@ -284,7 +284,7 @@
     },
     {
       "parameters": {
-        "content": "##  DATA PROCESSING\n\n Purpose                                     \n• Clean incoming data                        \n• Validate required fields                   \n• Normalize business values    ",
+        "content": "## DATA PROCESSING\n\n## Purpose\nPrepare incoming data before it reaches the CRM.\n\nTasks\n• Remove unnecessary whitespace\n• Normalize email and phone formats\n• Validate required fields\n• Standardize data types\n• Reject invalid submissions\n\n## Output\nClean, validated lead object.",
         "height": 576,
         "width": 896,
         "color": 6
@@ -300,10 +300,9 @@
     },
     {
       "parameters": {
-        "content": "# CRM LOGIC\n\n Purpose                                       \n • Prevent duplicate leads                     \n • Insert new leads                            \n • Update existing leads   ",
+        "content": "## CRM LOGIC\n\n## Purpose\nMaintain a single, accurate customer record.\n\nTasks\n• Search for existing lead\n• Compare unique identifiers\n• Insert new lead when none exists\n• Update existing lead when duplicate is found\n\n## Result\nOne canonical lead record with the latest information.",
         "height": 576,
-        "width": 944,
-        "color": "#F8E7B9"
+        "width": 944
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -316,16 +315,16 @@
     },
     {
       "parameters": {
-        "content": "# AUDIT LOG\n\n                                             \nPurpose                                       \n• Track processing status                     \n• Preserve complete processing history     ",
+        "content": "## AUDIT LOG\n\n## Purpose\nTrack the processing outcome for every lead.\n\nPossible Statuses\n• Processed\n• Duplicate\n• Invalid\n\n## Benefits\n• Complete processing history\n• Easier troubleshooting\n• Operational reporting",
         "height": 432,
         "width": 688,
-        "color": "#73FF00"
+        "color": 6
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         1120,
-        -464
+        -432
       ],
       "id": "ae1a3407-39dd-49e0-a7f0-2747b4de141d",
       "name": "Sticky Note3"
@@ -355,7 +354,7 @@
     },
     {
       "parameters": {
-        "content": "## Rules Enrichment\n\nPurpose:\nEnrich valid lead data using deterministic business rules.\n\nTasks:\n- Normalize budget into a numeric MAD value\n- Categorize budget range\n- Normalize common Moroccan locations\n- Determine urgency from the timeline\n- Create a structured enrichment object\n\nInput:\n- sanitized.budget\n- sanitized.location\n- sanitized.timeline\n\nOutput:\n- enrichment.rules\n- enrichment.ai\n- enrichment.metadata\n\nNotes:\n- Does not use AI\n- Preserves the original workflow data\n- Unknown values are returned as null or unknown",
+        "content": "## RULES ENRICHMENT\n\n## Purpose\nCalculate business-specific attributes used by the sales team.\n\nBusiness Rules\n• Determine lead type\n• Estimate urgency\n• Categorize budget\n• Normalize location\n• Create enrichment metadata\n\n## Output\nLead enriched with business classifications before database operations.",
         "height": 896,
         "width": 230
       },
@@ -363,7 +362,7 @@
       "typeVersion": 1,
       "position": [
         704,
-        -432
+        -720
       ],
       "id": "083a6e97-b728-4550-8f6b-44ba88cad9b0",
       "name": "Sticky Note4"
@@ -416,8 +415,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2208,
-        -480
+        2272,
+        -448
       ],
       "id": "41e9f437-0ea2-4062-8b90-6b8b54e0d394",
       "name": "Should Notify?"
@@ -444,8 +443,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2400,
-        -720
+        2512,
+        -576
       ],
       "id": "0afc8576-3704-4bb0-ab01-d565bd16f881",
       "name": "Prepare Notification"
@@ -461,8 +460,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2656,
-        -784
+        2688,
+        -736
       ],
       "id": "72f813df-57cb-47eb-8e43-f27470b94bb3",
       "name": "Log Notification",
@@ -475,7 +474,7 @@
     },
     {
       "parameters": {
-        "sendTo": "tlemcani.waliid@gmail.com",
+        "sendTo": "example@outlook.fr",
         "subject": "={{ $('Prepare Notification').item.json.notification.title }}",
         "message": "={{\n`NEW REAL ESTATE LEAD\n\nPriority: ${$('Prepare Notification').item.json.notification.priority}\n\nName: ${$('Prepare Notification').item.json.notification.lead.full_name}\nLead type: ${$('Prepare Notification').item.json.notification.lead.lead_type}\nPhone: ${$('Prepare Notification').item.json.notification.lead.phone ?? 'Not provided'}\nEmail: ${$('Prepare Notification').item.json.notification.lead.email ?? 'Not provided'}\n\nLocation: ${$('Prepare Notification').item.json.notification.lead.location}\nBudget: ${$('Prepare Notification').item.json.notification.lead.budget}\nBudget category: ${$('Prepare Notification').item.json.notification.lead.budget_category}\nUrgency: ${$('Prepare Notification').item.json.notification.lead.urgency}\n\nMessage:\n${$('Prepare Notification').item.json.notification.lead.message ?? 'No message provided'}\n\nRecommended action:\n${$('Prepare Notification').item.json.notification.recommended_action}\n\nSource: ${$('Prepare Notification').item.json.notification.metadata.source}\nLead reference: ${$('Prepare Notification').item.json.notification.metadata.source_lead_id}\n`\n}}",
         "options": {}
@@ -483,8 +482,8 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        2912,
-        -768
+        2864,
+        -528
       ],
       "id": "c6474da0-2d1f-4613-b945-6b32ee987e0c",
       "name": "Send Gmail Alert",
@@ -508,8 +507,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        3376,
-        -896
+        3216,
+        -864
       ],
       "id": "999d936e-ed63-4390-a4b5-930565bbca91",
       "name": "Mark Notification Sent",
@@ -548,8 +547,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        3120,
-        -768
+        2992,
+        -752
       ],
       "id": "c082562a-bd2c-4205-9bc0-ac660098cc87",
       "name": "Did Email Send ?",
@@ -567,8 +566,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        3392,
-        -672
+        3232,
+        -608
       ],
       "id": "fa6a4cd0-339a-42a7-a4f0-b54f08e56cf6",
       "name": "Mark Notification Failed",
@@ -578,6 +577,22 @@
           "name": "Postgres account"
         }
       }
+    },
+    {
+      "parameters": {
+        "content": "NOTIFICATIONS\n\n## Purpose\nNotify the sales team after successful processing.\n\nTasks\n• Build notification message\n• Record notification event\n• Send email\n• Update delivery status\n\n## Result\nThe team receives actionable lead information while delivery is tracked.",
+        "height": 672,
+        "width": 1216,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -944
+      ],
+      "id": "9b329321-58d3-43a3-b973-5f0b44c0c18a",
+      "name": "Sticky Note5"
     }
   ],
   "pinData": {},
@@ -789,7 +804,7 @@
     "errorWorkflow": "6p2oGBRTJbAP876T",
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "8acb007d-faeb-4396-8bee-dcf16068a2c6",
+  "versionId": "7d9e88e1-4228-4790-9366-5c2164b3b3ea",
   "meta": {
     "templateCredsSetupCompleted": true,
     "aiBuilderAssisted": true,
